@@ -1,0 +1,5 @@
+.idea/
+database.db
+package-lock.json
+node_modules
+dist/

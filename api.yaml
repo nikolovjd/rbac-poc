@@ -1,0 +1,337 @@
+openapi: 3.0.0
+info:
+  title: Role-Based Auth API
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3000
+
+components:
+  securitySchemes:
+    poc_auth:
+      type: oauth2
+      flows:
+        implicit:
+          authorizationUrl: 'https://example.com/oauth/authorize'
+          scopes:
+            'write:products': modify products in your account
+            'read:products': read your products
+            'write:offers': modify offers in your account
+            'read:offers': read your offers
+    api_key:
+      type: apiKey
+      name: api_key
+      in: header
+
+  schemas:
+    ProductGroup:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        productGroupId:
+          type: integer
+        name:
+          type: string
+    Offer:
+      type: object
+      properties:
+        id:
+          type: integer
+        productId:
+          type: integer
+        merchantId:
+          type: integer
+        price:
+          type: number
+
+paths:
+  /product-group:
+    get:
+      summary: Get all product groups
+      operationId: getProductGroups
+      responses:
+        '200':
+          description: A list of product groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductGroup'
+      security:
+        - poc_auth:
+            - 'read:product-group'
+        - api_key: []
+    post:
+      summary: Create a new product group
+      operationId: createProductGroup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductGroup'
+      responses:
+        '201':
+          description: Product group created
+      security:
+        - poc_auth:
+            - 'write:products'
+
+  /product-group/{id}:
+    get:
+      summary: Get a product group by ID
+      operationId: getProductGroupById
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: A product group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductGroup'
+      security:
+        - poc_auth:
+            - 'read:products'
+        - api_key: []
+    put:
+      summary: Update a product group
+      operationId: updateProductGroup
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductGroup'
+      responses:
+        '200':
+          description: Product group updated
+      security:
+        - poc_auth:
+            - 'write:products'
+    delete:
+      summary: Delete a product group
+      operationId: deleteProductGroup
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Product group deleted
+      security:
+        - poc_auth:
+            - 'write:products'
+
+  /products:
+    get:
+      summary: Get all products
+      operationId: getProducts
+      responses:
+        '200':
+          description: A list of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+      security:
+        - poc_auth:
+            - 'read:products'
+        - api_key: []
+    post:
+      summary: Create a new product
+      operationId: createProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Product'
+      responses:
+        '201':
+          description: Product created
+      security:
+        - poc_auth:
+            - 'write:products'
+
+  /products/{id}:
+    get:
+      summary: Get a product by ID
+      operationId: getProductById
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: A product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+      security:
+        - poc_auth:
+            - 'read:products'
+        - api_key: []
+    put:
+      summary: Update a product
+      operationId: updateProduct
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Product'
+      responses:
+        '200':
+          description: Product updated
+      security:
+        - poc_auth:
+            - 'write:products'
+    delete:
+      summary: Delete a product
+      operationId: deleteProduct
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Product deleted
+      security:
+        - poc_auth:
+            - 'write:products'
+
+  /offers:
+    get:
+      summary: Get all offers
+      operationId: getOffers
+      responses:
+        '200':
+          description: A list of offers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Offer'
+      security:
+        - poc_auth:
+            - 'read:offers'
+        - api_key: []
+    post:
+      summary: Create a new offer
+      operationId: createOffer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Offer'
+      responses:
+        '201':
+          description: Offer created
+      security:
+        - poc_auth:
+            - 'write:offers'
+
+  /offers/{id}:
+    get:
+      summary: Get an offer by ID
+      operationId: getOfferById
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: An offer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+      security:
+        - poc_auth:
+            - 'read:offers'
+        - api_key: []
+    put:
+      summary: Update an offer
+      operationId: updateOffer
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Offer'
+      responses:
+        '200':
+          description: Offer updated
+      security:
+        - poc_auth:
+            - 'write:offers'
+      # TODO: Handle ownership so that merchants can only update their own offers
+    delete:
+      summary: Delete an offer
+      operationId: deleteOffer
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Offer deleted
+      security:
+        - poc_auth:
+            - 'write:offers'
+      # TODO: Handle ownership so that merchants can only delete their own offers
+
+  /public:
+    get:
+      summary: Public endpoint
+      operationId: publicEndpoint
+      responses:
+        '200':
+          description: Public content
