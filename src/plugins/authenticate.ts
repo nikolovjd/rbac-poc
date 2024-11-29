@@ -6,33 +6,38 @@ export async function authenticateOAuth2(
   reply: FastifyReply,
   requiredScopes: string[]
 ) {
+  console.log('Required Scopes:', requiredScopes)
   const authHeader = request.headers['authorization']
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw new Error('Missing or invalid Authorization header')
+    return false // Return false to allow other security handlers
   }
 
   const token = authHeader.substring(7)
 
   try {
     const payload = decodeToken(token)
+    console.log('Token Scopes:', payload.scopes)
     if (!payload || !payload.scopes || !payload.user || !payload.user.id) {
-      throw new Error('Invalid token')
+      return false
     }
 
-    // Verify that the token's scopes include the required scopes
-    const hasRequiredScopes = requiredScopes.every((scope) =>
-      payload.scopes.includes(scope)
-    )
+    // Check if any of the required scopes are included in the token's scopes
+    const hasRequiredScopes =
+      requiredScopes.length === 0 ||
+      requiredScopes.some((scope) => payload.scopes.includes(scope))
+
     if (!hasRequiredScopes) {
-      throw new Error('Insufficient scope')
+      return false
     }
 
     request.user = payload.user
     request.scopes = payload.scopes
+    return true // Indicate successful authentication
   } catch (err) {
-    throw new Error('Invalid token')
+    return false
   }
 }
+
 
 export async function authenticateApiKey(
   request: FastifyRequest,
@@ -40,19 +45,17 @@ export async function authenticateApiKey(
 ) {
   const apiKey = request.headers['api_key'] || request.headers['x-api-key']
 
-  if (!apiKey) {
-    throw new Error('API key is missing')
-  }
-
-  if (apiKey !== 'valid_api_key') {
-    throw new Error('Invalid API key')
+  if (!apiKey || apiKey !== 'valid_api_key') {
+    return false
   }
 
   request.user = { role: 'api_key_user' }
   request.scopes = Array.from(scopeToPermissions.keys()).filter((scope) =>
     scope.startsWith('read:')
   )
+  return true
 }
+
 
 function decodeToken(token: string): any {
   try {

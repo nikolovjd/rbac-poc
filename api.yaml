@@ -14,10 +14,12 @@ components:
         implicit:
           authorizationUrl: 'https://example.com/oauth/authorize'
           scopes:
-            'write:products': modify products in your account
-            'read:products': read your products
+            'write:productss': modify products in your account
+            'read:productss': read your products
             'write:offers': modify offers in your account
             'read:offers': read your offers
+            'manage:productss': Administer all products
+            'manage:offers': Administer all offers
     api_key:
       type: apiKey
       name: api_key
@@ -45,9 +47,9 @@ components:
       properties:
         id:
           type: integer
-        productId:
-          type: integer
         merchantId:
+          type: string
+        productId:
           type: integer
         price:
           type: number
@@ -68,7 +70,8 @@ paths:
                   $ref: '#/components/schemas/ProductGroup'
       security:
         - poc_auth:
-            - 'read:product-group'
+            - 'read:product-groups'
+            - 'manage:product-groups'
         - api_key: []
     post:
       summary: Create a new product group
@@ -84,7 +87,8 @@ paths:
           description: Product group created
       security:
         - poc_auth:
-            - 'write:products'
+            - 'write:product-groups'
+            - 'manage:product-groups'
 
   /product-group/{id}:
     get:
@@ -105,7 +109,8 @@ paths:
                 $ref: '#/components/schemas/ProductGroup'
       security:
         - poc_auth:
-            - 'read:products'
+            - 'read:product-groups'
+            - 'manage:product-groups'
         - api_key: []
     put:
       summary: Update a product group
@@ -127,7 +132,8 @@ paths:
           description: Product group updated
       security:
         - poc_auth:
-            - 'write:products'
+            - 'write:product-groups'
+            - 'manage:product-groups'
     delete:
       summary: Delete a product group
       operationId: deleteProductGroup
@@ -142,7 +148,8 @@ paths:
           description: Product group deleted
       security:
         - poc_auth:
-            - 'write:products'
+            - 'write:product-groups'
+            - 'manage:product-groups'
 
   /products:
     get:
@@ -160,6 +167,7 @@ paths:
       security:
         - poc_auth:
             - 'read:products'
+            - 'manage:products'
         - api_key: []
     post:
       summary: Create a new product
@@ -176,6 +184,7 @@ paths:
       security:
         - poc_auth:
             - 'write:products'
+            - 'manage:products'
 
   /products/{id}:
     get:
@@ -197,6 +206,7 @@ paths:
       security:
         - poc_auth:
             - 'read:products'
+            - 'manage:products'
         - api_key: []
     put:
       summary: Update a product
@@ -219,6 +229,7 @@ paths:
       security:
         - poc_auth:
             - 'write:products'
+            - 'manage:products'
     delete:
       summary: Delete a product
       operationId: deleteProduct
@@ -234,6 +245,7 @@ paths:
       security:
         - poc_auth:
             - 'write:products'
+            - 'manage:products'
 
   /offers:
     get:
@@ -250,7 +262,8 @@ paths:
                   $ref: '#/components/schemas/Offer'
       security:
         - poc_auth:
-            - 'read:offers'
+            - 'read:offers:owner'
+            - 'manage:offers'
         - api_key: []
     post:
       summary: Create a new offer
@@ -267,6 +280,7 @@ paths:
       security:
         - poc_auth:
             - 'write:offers'
+            - 'manage:offers'
 
   /offers/{id}:
     get:
@@ -288,6 +302,7 @@ paths:
       security:
         - poc_auth:
             - 'read:offers:owner'
+            - 'manage:offers'
         - api_key: []
     put:
       summary: Update an offer
@@ -309,8 +324,8 @@ paths:
           description: Offer updated
       security:
         - poc_auth:
-            - 'write:offers'
             - 'write:offers:owner'
+            - 'manage:offers'
     delete:
       summary: Delete an offer
       operationId: deleteOffer
@@ -325,8 +340,8 @@ paths:
           description: Offer deleted
       security:
         - poc_auth:
-            - 'write:offers'
-      # TODO: Handle ownership so that merchants can only delete their own offers
+            - 'write:offers:owner'
+            - 'manage:offers'
 
   /public:
     get:

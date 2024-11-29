@@ -5,12 +5,36 @@ import {
   InferSubjects,
 } from '@casl/ability'
 import { FastifyRequest } from 'fastify'
+import { Offer } from '../models/Offer.js'
 import { parseOpenApiSecurity } from '../utils/openapi-parser.js'
+import { Product } from '../models/Product.js'
+import { ProductGroup } from '../models/ProductGroup.js'
 
 export type Actions = 'create' | 'read' | 'update' | 'delete' | 'manage'
-type Subjects = InferSubjects<string | 'all'>
 
-export type AppAbility = Ability<[Actions, Subjects]>
+/*export type Subjects =
+  | 'Offer'
+  | 'Product'
+  | 'ProductGroup'
+  | Offer
+  | Product
+  | ProductGroup
+  | 'all'*/
+
+export type Subjects = 'Offer' | 'Product' | 'ProductGroup' | 'all'
+
+export type AppAbility = Ability<[Actions, Subjects | any]>
+export const AppAbility = Ability as AbilityClass<AppAbility>
+
+const subjectMap: { [key: string]: Subjects } = {
+  'offers': 'Offer',
+  'Offer': 'Offer',
+  'products': 'Product',
+  'Product': 'Product',
+  'product-groups': 'ProductGroup',
+  'ProductGroup': 'ProductGroup',
+  'all': 'all',
+}
 
 const operations = parseOpenApiSecurity()
 
@@ -21,10 +45,9 @@ export const scopeToPermissions = new Map<
 
 operations.forEach((op) => {
   op.scopes.forEach((scope) => {
-    const [actionPart, subjectPart] = scope.split(':')
-    const action = mapScopeActionToAbilityAction(actionPart)
-    const subject = subjectPart || 'all'
-
+    const { action, subject } = parseScope(scope)
+    console.log('ACTION', action)
+    console.log('SUBJECT', subject)
     scopeToPermissions.set(scope, { action, subject })
   })
 })
@@ -34,6 +57,12 @@ function mapScopeActionToAbilityAction(scopeAction: string): Actions {
     case 'read':
       return 'read'
     case 'write':
+      return 'create'
+    case 'update':
+      return 'update'
+    case 'delete':
+      return 'delete'
+    case 'manage':
       return 'manage'
     default:
       return 'read'
@@ -51,46 +80,52 @@ function parseScope(scope: string): {
   const ownershipPart = parts[2]
 
   const action = mapScopeActionToAbilityAction(actionPart)
-  const subject = subjectPart
+  const subject = subjectMap[subjectPart] || 'all'
+
+  console.log('Scope:', scope)
+  console.log('Subject Part:', subjectPart)
+  console.log('Mapped Subject:', subject)
 
   let condition = undefined
   if (ownershipPart === 'owner') {
-    if (subject === 'offers') {
-      condition = { merchantId: '${userId}' }
-    } else if (subject === 'products') {
-      condition = { ownerId: '${userId}' }
-    }
+    condition = { merchantId: '${userId}' }
   }
 
   return { action, subject, condition }
 }
 
+
 export function buildAbility(request: FastifyRequest): AppAbility {
-  const { can, cannot, build } = new AbilityBuilder(
-    Ability as AbilityClass<AppAbility>
-  )
+  const { can, cannot, build } = new AbilityBuilder<AppAbility>(Ability as AbilityClass<AppAbility>)
 
   const scopes = request.scopes || []
   const userId = request.user.id
 
+  /*
+  const userRole = request.user.role
+  if (userRole === 'admin') {
+    can('manage', 'all')
+  } else {
+    // Process scopes as usual
+  }
+  */
+
   scopes.forEach((scope: string) => {
-    const { action, subject, condition } = parseScope(scope)
+    const { action, subject: abilitySubject, condition } = parseScope(scope)
     if (condition) {
-      // Replace any '${userId}' with actual userId
-      const conditionWithUserId = {}
+      // Replaces '${userId}' with actual userId
+      const conditionWithUserId: Record<string, any> = {}
       for (const key in condition) {
         const value = condition[key]
         if (typeof value === 'string' && value === '${userId}') {
-          // @ts-ignore
           conditionWithUserId[key] = userId
         } else {
-          // @ts-ignore
           conditionWithUserId[key] = value
         }
       }
-      can(action, subject, conditionWithUserId)
+      can(action, abilitySubject as Subjects, conditionWithUserId)
     } else {
-      can(action, subject)
+      can(action, abilitySubject as Subjects)
     }
   })
 
@@ -99,5 +134,20 @@ export function buildAbility(request: FastifyRequest): AppAbility {
     cannot('manage', 'all')
   }
 
-  return build()
+  return build({
+    detectSubjectType: (item) => {
+      if (item && 'merchantId' in item && 'price' in item) {
+        return 'Offer'
+      }
+      if (item && 'productGroupId' in item && 'name' in item) {
+        return 'Product'
+      }
+      if (item && 'name' in item && !('productGroupId' in item)) {
+        return 'ProductGroup'
+      }
+      return 'all'
+    },
+  })
 }
+
+

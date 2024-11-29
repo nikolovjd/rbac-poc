@@ -42,24 +42,22 @@ const glueOptions = {
   securityHandlers: {
     // @ts-ignore
     poc_auth: async function (req, reply, scopes) {
-      try {
-        await app.authenticateOAuth2(req, reply, scopes)
+      const isAuthenticated = await app.authenticateOAuth2(req, reply, scopes)
+      if (isAuthenticated) {
         req.ability = buildAbility(req)
-        return true // Indicate successful authentication
-      } catch (err) {
-        // @ts-ignore
-        throw app.httpErrors.unauthorized('Unauthorized')
+        return true
+      } else {
+        return false
       }
     },
     // @ts-ignore
-    api_key: async function (req) {
-      try {
-        await app.authenticateApiKey(req, req)
+    api_key: async function (req, reply) {
+      const isAuthenticated = await app.authenticateApiKey(req, reply)
+      if (isAuthenticated) {
         req.ability = buildAbility(req)
         return true
-      } catch (err) {
-        // @ts-ignore
-        throw app.httpErrors.unauthorized('Unauthorized')
+      } else {
+        return false
       }
     },
   },

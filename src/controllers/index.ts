@@ -1,6 +1,10 @@
 import { FastifyReply, FastifyRequest } from 'fastify'
 import { openDb } from '../db.js'
-import { Actions } from '../plugins/abilities.js'
+import { Actions, AppAbility, Subjects } from '../plugins/abilities.js'
+import { Offer } from '../models/Offer.js'
+import { Product } from '../models/Product.js'
+import { ProductGroup } from '../models/ProductGroup.js'
+import { subject } from '@casl/ability'
 
 export class Controllers {
   async publicEndpoint(request: FastifyRequest, reply: FastifyReply) {
@@ -10,22 +14,42 @@ export class Controllers {
   checkAbility(
     request: FastifyRequest,
     action: Actions,
-    subject: string,
-    resource?: any
+    resource: Subjects | any
   ) {
-    if (!request.ability || !request.ability.can(action, subject, resource)) {
-      throw new Error('Forbidden')
+    const ability = request.ability as AppAbility
+    if (!ability) {
+      throw new Error('Ability is undefined')
+    }
+
+    if (typeof resource === 'string') {
+      // Resource is a subject string
+      // @ts-ignore
+      if (!ability.can(action, resource)) {
+        throw new Error('Forbidden')
+      }
+    } else {
+      // Resource is an instance
+      if (!ability.can(action, resource)) {
+        throw new Error('Forbidden')
+      }
     }
   }
+
 
   // Product Groups Methods
   async getProductGroups(request: FastifyRequest, reply: FastifyReply) {
     try {
-      this.checkAbility(request, 'read', 'products')
+      this.checkAbility(request, 'read', 'ProductGroup')
 
       const db = await openDb()
-      const productGroups = await db.all('SELECT * FROM ProductGroup')
+      const productGroupsData = await db.all('SELECT * FROM ProductGroup')
       await db.close()
+
+      // Map data to ProductGroup instances
+      const productGroups = productGroupsData.map(
+        (data: any) => new ProductGroup(data)
+      )
+
       reply.send(productGroups)
     } catch (err) {
       reply.code(403).send({ error: 'Forbidden' })
@@ -34,14 +58,13 @@ export class Controllers {
 
   async createProductGroup(request: FastifyRequest, reply: FastifyReply) {
     try {
-      this.checkAbility(request, 'manage', 'products')
+      this.checkAbility(request, 'create', 'ProductGroup')
 
       const { name } = request.body as any
       const db = await openDb()
-      const result = await db.run(
-        'INSERT INTO ProductGroup (name) VALUES (?)',
-        [name]
-      )
+      const result = await db.run('INSERT INTO ProductGroup (name) VALUES (?)', [
+        name,
+      ])
       await db.close()
       reply.code(201).send({ id: result.lastID, name })
     } catch (err) {
@@ -52,11 +75,15 @@ export class Controllers {
   // Products Methods
   async getProducts(request: FastifyRequest, reply: FastifyReply) {
     try {
-      this.checkAbility(request, 'read', 'products')
+      this.checkAbility(request, 'read', 'Product')
 
       const db = await openDb()
-      const products = await db.all('SELECT * FROM Product')
+      const productsData = await db.all('SELECT * FROM Product')
       await db.close()
+
+      // Map data to Product instances
+      const products = productsData.map((data: any) => new Product(data))
+
       reply.send(products)
     } catch (err) {
       reply.code(403).send({ error: 'Forbidden' })
@@ -65,13 +92,14 @@ export class Controllers {
 
   async getProductById(request: FastifyRequest, reply: FastifyReply) {
     try {
-      this.checkAbility(request, 'read', 'products')
-
       const { id } = request.params as any
       const db = await openDb()
-      const product = await db.get('SELECT * FROM Product WHERE id = ?', [id])
+      const productData = await db.get('SELECT * FROM Product WHERE id = ?', [id])
       await db.close()
-      if (product) {
+
+      if (productData) {
+        const product = new Product(productData)
+        this.checkAbility(request, 'read', product)
         reply.send(product)
       } else {
         reply.code(404).send({ error: 'Product not found' })
@@ -83,7 +111,7 @@ export class Controllers {
 
   async createProduct(request: FastifyRequest, reply: FastifyReply) {
     try {
-      this.checkAbility(request, 'manage', 'products')
+      this.checkAbility(request, 'create', 'Product')
 
       const { productGroupId, name } = request.body as any
       const db = await openDb()
@@ -100,11 +128,23 @@ export class Controllers {
 
   async updateProduct(request: FastifyRequest, reply: FastifyReply) {
     try {
-      this.checkAbility(request, 'manage', 'products')
-
       const { id } = request.params as any
-      const { productGroupId, name } = request.body as any
       const db = await openDb()
+      const existingProductData = await db.get(
+        'SELECT * FROM Product WHERE id = ?',
+        [id]
+      )
+
+      if (!existingProductData) {
+        await db.close()
+        reply.code(404).send({ error: 'Product not found' })
+        return
+      }
+
+      const existingProduct = new Product(existingProductData)
+      this.checkAbility(request, 'update', existingProduct)
+
+      const { productGroupId, name } = request.body as any
       const result = await db.run(
         'UPDATE Product SET productGroupId = ?, name = ? WHERE id = ?',
         [productGroupId, name, id]
@@ -123,10 +163,22 @@ export class Controllers {
 
   async deleteProduct(request: FastifyRequest, reply: FastifyReply) {
     try {
-      this.checkAbility(request, 'manage', 'products')
-
       const { id } = request.params as any
       const db = await openDb()
+      const existingProductData = await db.get(
+        'SELECT * FROM Product WHERE id = ?',
+        [id]
+      )
+
+      if (!existingProductData) {
+        await db.close()
+        reply.code(404).send({ error: 'Product not found' })
+        return
+      }
+
+      const existingProduct = new Product(existingProductData)
+      this.checkAbility(request, 'delete', existingProduct)
+
       const result = await db.run('DELETE FROM Product WHERE id = ?', [id])
       await db.close()
       // @ts-ignore
@@ -143,37 +195,47 @@ export class Controllers {
   // Offers Methods
   async getOffers(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const ability = request.ability
-      const db = await openDb()
-      let offers
-
-      if (ability.can('read', 'offers')) {
-        // User can read all offers
-        offers = await db.all('SELECT * FROM Offer')
-      } else if (ability.can('read', 'offers', { merchantId: request.user.id })) {
-        // User can read own offers
-        offers = await db.all('SELECT * FROM Offer WHERE merchantId = ?', [
-          request.user.id,
-        ])
-      } else {
-        throw new Error('Forbidden')
+      const ability = request.ability as AppAbility
+      if (!ability) {
+        throw new Error('Ability is undefined')
       }
 
+      const db = await openDb()
+      const offersData = await db.all('SELECT * FROM Offer')
       await db.close()
+
+      // Use plain objects instead of class instances
+      const offers = offersData
+        .map((data: any) => ({
+          ...data,
+          merchantId: String(data.merchantId), // Ensure merchantId is a string
+        }))
+        .filter((offer) => {
+          const canRead = ability.can('read', offer)
+          console.log(
+            `Offer ID: ${offer.id}, Merchant ID: ${offer.merchantId}, User ID: ${request.user.id}, Can Read: ${canRead}`
+          )
+          return canRead
+        })
+
       reply.send(offers)
     } catch (err) {
+      console.error(err)
       reply.code(403).send({ error: 'Forbidden' })
     }
   }
+
 
   async getOfferById(request: FastifyRequest, reply: FastifyReply) {
     try {
       const { id } = request.params as any
       const db = await openDb()
-      const offer = await db.get('SELECT * FROM Offer WHERE id = ?', [id])
+      const offerData = await db.get('SELECT * FROM Offer WHERE id = ?', [id])
       await db.close()
-      if (offer) {
-        this.checkAbility(request, 'read', 'offers', offer)
+
+      if (offerData) {
+        const offer = new Offer(offerData)
+        this.checkAbility(request, 'read', offer)
         reply.send(offer)
       } else {
         reply.code(404).send({ error: 'Offer not found' })
@@ -185,16 +247,19 @@ export class Controllers {
 
   async createOffer(request: FastifyRequest, reply: FastifyReply) {
     try {
-      this.checkAbility(request, 'manage', 'offers')
+      this.checkAbility(request, 'create', 'Offer')
 
-      const { productId, merchantId, price } = request.body as any
+      const { productId, price } = request.body as any
+      const merchantId = request.user.id
       const db = await openDb()
       const result = await db.run(
         'INSERT INTO Offer (productId, merchantId, price) VALUES (?, ?, ?)',
         [productId, merchantId, price]
       )
       await db.close()
-      reply.code(201).send({ id: result.lastID, productId, merchantId, price })
+      reply
+        .code(201)
+        .send({ id: result.lastID, productId, merchantId, price })
     } catch (err) {
       reply.code(403).send({ error: 'Forbidden' })
     }
@@ -204,24 +269,33 @@ export class Controllers {
     try {
       const { id } = request.params as any
       const db = await openDb()
-      const existingOffer = await db.get('SELECT * FROM Offer WHERE id = ?', [id])
-      if (!existingOffer) {
+      const existingOfferData = await db.get('SELECT * FROM Offer WHERE id = ?', [
+        id,
+      ])
+
+      if (!existingOfferData) {
         await db.close()
         reply.code(404).send({ error: 'Offer not found' })
         return
       }
 
-      this.checkAbility(request, 'manage', 'offers', existingOffer)
+      const existingOffer = new Offer(existingOfferData)
+      this.checkAbility(request, 'update', existingOffer)
 
-      const { productId, merchantId, price } = request.body as any
+      const { productId, price } = request.body as any
       const result = await db.run(
-        'UPDATE Offer SET productId = ?, merchantId = ?, price = ? WHERE id = ?',
-        [productId, merchantId, price, id]
+        'UPDATE Offer SET productId = ?, price = ? WHERE id = ?',
+        [productId, price, id]
       )
       await db.close()
       // @ts-ignore
       if (result.changes > 0) {
-        reply.send({ id, productId, merchantId, price })
+        reply.send({
+          id,
+          productId,
+          merchantId: existingOffer.merchantId,
+          price,
+        })
       } else {
         reply.code(404).send({ error: 'Offer not found' })
       }
@@ -234,14 +308,18 @@ export class Controllers {
     try {
       const { id } = request.params as any
       const db = await openDb()
-      const existingOffer = await db.get('SELECT * FROM Offer WHERE id = ?', [id])
-      if (!existingOffer) {
+      const existingOfferData = await db.get('SELECT * FROM Offer WHERE id = ?', [
+        id,
+      ])
+
+      if (!existingOfferData) {
         await db.close()
         reply.code(404).send({ error: 'Offer not found' })
         return
       }
 
-      this.checkAbility(request, 'manage', 'offers', existingOffer)
+      const existingOffer = new Offer(existingOfferData)
+      this.checkAbility(request, 'delete', existingOffer)
 
       const result = await db.run('DELETE FROM Offer WHERE id = ?', [id])
       await db.close()
