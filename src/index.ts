@@ -70,41 +70,6 @@ app.register(fastifyAuth)
 app.decorate('authenticateOAuth2', authenticateOAuth2)
 app.decorate('authenticateApiKey', authenticateApiKey)
 
-// Pre-handler to check security requirements
-/*app.addHook('preHandler', async (request, reply) => {
-  // @ts-ignore
-  console.log('Route Schema:', request.routeSchema);
-  // @ts-ignore
-  const security = request.routeSchema?.security;
-  console.log('Security:', security);
-
-  if (security) {
-    let authenticated = false;
-    for (const secRequirement of security) {
-      try {
-        if (secRequirement.poc_auth) {
-          await app.authenticateOAuth2(request, reply, secRequirement.poc_auth);
-          authenticated = true;
-          break;
-        } else if (secRequirement.api_key) {
-          await app.authenticateApiKey(request, reply);
-          authenticated = true;
-          break;
-        }
-      } catch (err) {
-        // Continue to try next security requirement
-      }
-    }
-
-    if (!authenticated) {
-      return reply.code(401).send({ error: 'Unauthorized' });
-    }
-
-    // Build abilities based on user's scopes
-    request.ability = buildAbility(request);
-  }
-});*/
-
 app.register(fastifyOpenapiGlue, glueOptions)
 
 const start = async () => {

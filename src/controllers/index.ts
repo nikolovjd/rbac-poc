@@ -7,8 +7,13 @@ export class Controllers {
     reply.send({ message: 'This is a public endpoint' })
   }
 
-  checkAbility(request: FastifyRequest, action: Actions, subject: string) {
-    if (!request.ability || !request.ability.can(action, subject)) {
+  checkAbility(
+    request: FastifyRequest,
+    action: Actions,
+    subject: string,
+    resource?: any
+  ) {
+    if (!request.ability || !request.ability.can(action, subject, resource)) {
       throw new Error('Forbidden')
     }
   }
@@ -138,12 +143,41 @@ export class Controllers {
   // Offers Methods
   async getOffers(request: FastifyRequest, reply: FastifyReply) {
     try {
-      this.checkAbility(request, 'read', 'offers')
-
+      const ability = request.ability
       const db = await openDb()
-      const offers = await db.all('SELECT * FROM Offer')
+      let offers
+
+      if (ability.can('read', 'offers')) {
+        // User can read all offers
+        offers = await db.all('SELECT * FROM Offer')
+      } else if (ability.can('read', 'offers', { merchantId: request.user.id })) {
+        // User can read own offers
+        offers = await db.all('SELECT * FROM Offer WHERE merchantId = ?', [
+          request.user.id,
+        ])
+      } else {
+        throw new Error('Forbidden')
+      }
+
       await db.close()
       reply.send(offers)
+    } catch (err) {
+      reply.code(403).send({ error: 'Forbidden' })
+    }
+  }
+
+  async getOfferById(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = request.params as any
+      const db = await openDb()
+      const offer = await db.get('SELECT * FROM Offer WHERE id = ?', [id])
+      await db.close()
+      if (offer) {
+        this.checkAbility(request, 'read', 'offers', offer)
+        reply.send(offer)
+      } else {
+        reply.code(404).send({ error: 'Offer not found' })
+      }
     } catch (err) {
       reply.code(403).send({ error: 'Forbidden' })
     }
@@ -168,11 +202,18 @@ export class Controllers {
 
   async updateOffer(request: FastifyRequest, reply: FastifyReply) {
     try {
-      this.checkAbility(request, 'manage', 'offers')
-
       const { id } = request.params as any
-      const { productId, merchantId, price } = request.body as any
       const db = await openDb()
+      const existingOffer = await db.get('SELECT * FROM Offer WHERE id = ?', [id])
+      if (!existingOffer) {
+        await db.close()
+        reply.code(404).send({ error: 'Offer not found' })
+        return
+      }
+
+      this.checkAbility(request, 'manage', 'offers', existingOffer)
+
+      const { productId, merchantId, price } = request.body as any
       const result = await db.run(
         'UPDATE Offer SET productId = ?, merchantId = ?, price = ? WHERE id = ?',
         [productId, merchantId, price, id]
@@ -191,10 +232,17 @@ export class Controllers {
 
   async deleteOffer(request: FastifyRequest, reply: FastifyReply) {
     try {
-      this.checkAbility(request, 'manage', 'offers')
-
       const { id } = request.params as any
       const db = await openDb()
+      const existingOffer = await db.get('SELECT * FROM Offer WHERE id = ?', [id])
+      if (!existingOffer) {
+        await db.close()
+        reply.code(404).send({ error: 'Offer not found' })
+        return
+      }
+
+      this.checkAbility(request, 'manage', 'offers', existingOffer)
+
       const result = await db.run('DELETE FROM Offer WHERE id = ?', [id])
       await db.close()
       // @ts-ignore

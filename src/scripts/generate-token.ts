@@ -1,21 +1,22 @@
-const role = process.argv[2]
-const scopesInput = process.argv.slice(3)
+const userId = process.argv[2]
+const role = process.argv[3]
+const scopesInput = process.argv.slice(4)
 
-if (!role || scopesInput.length === 0) {
+if (!userId || !role || scopesInput.length === 0) {
   console.error(
-    'Usage: ts-node src/scripts/generate-oauth2-token.ts <role> <scopes>'
+    'Usage: ts-node src/scripts/generate-token.ts <userId> <role> <scopes>'
   )
   process.exit(1)
 }
 
 const payload = {
-  user: { role },
+  user: { id: userId, role },
   scopes: scopesInput,
 }
 
 const token = Buffer.from(JSON.stringify(payload)).toString('base64')
 
 console.log(
-  `OAuth2 Token for role ${role} with scopes ${scopesInput.join(', ')}:`
+  `OAuth2 Token for userId ${userId}, role ${role} with scopes ${scopesInput.join(', ')}:`
 )
 console.log(`Bearer ${token}`)

@@ -287,7 +287,7 @@ paths:
                 $ref: '#/components/schemas/Offer'
       security:
         - poc_auth:
-            - 'read:offers'
+            - 'read:offers:owner'
         - api_key: []
     put:
       summary: Update an offer
@@ -310,7 +310,7 @@ paths:
       security:
         - poc_auth:
             - 'write:offers'
-      # TODO: Handle ownership so that merchants can only update their own offers
+            - 'write:offers:owner'
     delete:
       summary: Delete an offer
       operationId: deleteOffer

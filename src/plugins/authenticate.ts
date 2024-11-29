@@ -15,7 +15,7 @@ export async function authenticateOAuth2(
 
   try {
     const payload = decodeToken(token)
-    if (!payload || !payload.scopes) {
+    if (!payload || !payload.scopes || !payload.user || !payload.user.id) {
       throw new Error('Invalid token')
     }
 
